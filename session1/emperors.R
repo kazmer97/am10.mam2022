@@ -3,7 +3,7 @@ library(vroom)
 library(extrafont)
 library(ggtext)
 
-loadfonts(device="win")
+loadfonts(device="pdf")
 
 # source of data https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-08-13
 url <- "https://github.com/rfordatascience/tidytuesday/raw/master/data/2019/2019-08-13/emperors.csv"

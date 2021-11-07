@@ -45,7 +45,7 @@ library(skimr)
 library(nycdogs)
 library(sf) # for geospatial visualisation
 
-loadfonts(device="win")
+loadfonts(device="pdf")
 # loadfonts(device="pdf") if you have a mac
 
 ```
@@ -82,11 +82,11 @@ my_colours <- c("grey70", "tomato")
 
 emperor_killers %>% 
   mutate(
-    ___________ = ifelse(killer == "___________", TRUE, FALSE),
+    wife = ifelse(killer == "Wife", TRUE, FALSE),
     # use `fct_inorder()` to maintain the way we sorted the data
     killer = fct_inorder(killer)
   ) %>%
-  ggplot(aes(x = n, y = killer, fill = ___________)) +
+  ggplot(aes(x = n, y = killer, fill = wife)) +
   geom_col() +
   scale_fill_manual(values = my_colours)+
   geom_text(
@@ -100,7 +100,7 @@ emperor_killers %>%
     axis.title.y = element_blank(), 
     legend.position = "none" 
   ) +
-  ___________(values = ___________) +
+  scale_color_manual(values = my_colours) +
   xlab("number of emperors")
 ```
 
@@ -148,7 +148,7 @@ gapminder %>%
 gapminder %>%
   filter(year == 2007) %>%
   mutate(
-    label = ifelse(______  %in% _____, as.character(country), _____________ )
+    label = ifelse(country  %in% some_countries, as.character(country), "" )
   ) %>%
   ggplot(aes(log(gdpPercap), lifeExp)) +
     geom_point(
@@ -303,10 +303,9 @@ titanic %>%
   theme_minimal() +
   theme(legend.position = "bottom", 
         legend.justification = "center",
-        text=element_text(size=12, family="Lato"),
+        text=element_text(size=12),
         plot.title.position = "plot"
-  ) +
-  NULL
+  ) 
 
   
 ```
@@ -348,7 +347,7 @@ le_line_plot <- africa %>%
 
   theme(
     # remove legend using the legend.position argument in theme()
-    # ________________,
+    legend.position = NULL,
     panel.grid.major.x = element_blank(),
     panel.grid.minor = element_blank()
   ) +
