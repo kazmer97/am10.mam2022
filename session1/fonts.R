@@ -1,7 +1,8 @@
 # https://github.com/wch/extrafont
 # install.packages("extrafont")
 library(extrafont)
-# for windows, you may have to remotes::install_version("Rttf2pt1", version = "1.3.8")
+# for windows, you may have to install an older version 1.3.8 of Rttf2pt1 as follows
+# remotes::install_version("Rttf2pt1", version = "1.3.8")
 
 library(tidyverse)
 library(patchwork)
@@ -14,14 +15,18 @@ font_import()
 # Windows: use skyfonts to download google fonts on your computer https://www.fonts.com/web-fonts/google 
 # if using skyfonts, point to the directory where google fonts live 
 # on my windows machine this is @
-font_import( paths="C:/Users/kchristodoulou/AppData/Roaming/Monotype/skyfonts-google")
+font_import(paths="C:/Users/kchristodoulou/AppData/Roaming/Monotype/skyfonts-google")
 
 #if you use FontBase to get all Google fonts
-font_import( paths="C:/Users/kchristodoulou/FontBase")
+font_import(paths="C:/Users/kchristodoulou/FontBase")
 
 # Alternatively, you can download all of google fonts, by downloading and extracting 
 # https://github.com/google/fonts/archive/master.zip (over 300 Mb) from https://github.com/google/fonts
 
+#if you have a mac, use 
+extrafont::loadfonts(device="pdf")
+
+#if you have a windows machine, use
 extrafont::loadfonts(device="win")
 
 
@@ -39,7 +44,7 @@ ggplot(mtcars, aes(x=wt, y=mpg)) +
   theme_minimal()+
   NULL
 
-p1 <- plot + theme(text=element_text(size=16, family="Fira Sans"))
+p1 <- plot + theme(text=element_text(size=16, family="Montserrat"))
 p2 <- plot + theme(text=element_text(size=16, family="Bahnschrift"))
 p3 <- plot + theme(text=element_text(size=16, family="Oswald"))
 p4 <- plot + theme(text=element_text(size=16, family="Rock Salt"))
