@@ -25,3 +25,5 @@ Code and datafiles used in the AM10 course
 | 03     |Jiaying Chen; Yingjin He; Kashish Solanki; Sabrina Seow; Roman Vazquez Lorenzo; Maximilian Stock |maximilianstock |<https://github.com/maximilianstock/AM10-Group-3>|  <N/A>  | 2011-11-09 |
 | 11 | Nisa Ozer, Thomas Giannetti-Fakhoury, Lauren Wade, Nereid Kwok, Chandrima Tolia, Kazmer Nagy-Betegh | kazmer97 | <https://github.com/kazmer97/data-visualisation_final-project> | <N/A> |  2021-11-09 |
 | 04 |Xinyue Zhang, Wei Guo, Xenia Huber, Harsh Tripathi, Nikolaos Panayotou | xinyuezhang23 | <https://github.com/xinyuezhang23/am10_group4> | <N/A> |  2021-11-09 |
+| 05 |Alex Kubbinga, Raghav Mehta, Yuan Gao, Clara Sanchez, Jean Huang, Raina Doshi  | Gaoyuan66 | <https://github.com/Gaoyuan66/data_visualization_group_5> | <N/A> |  2021-11-10 | 07 | Valeria Opre, Palak Awashti, Jeffrey Kaikati, Jose Laffitte, Hanyu Wang Hovik, Jasmine Zhang | jeffreykaikati |  < https://github.com/JeffreyKaikati/group7-visualisation> | <N/A> | 2021-11-10 
+| 08 |Zhicong Hu, Zervaan Borok, Francois Mizrahi, Chuhan Zhang, Estelle Tessaro, Anuhya Yallabandi | zhiconghu | <https://github.com/zhiconghu/AM10_Group8> | <N/A> |  2021-11-12 |
