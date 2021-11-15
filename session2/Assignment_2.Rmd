@@ -1,0 +1,87 @@
+# MET Police
+
+```{r load met data, include=FALSE}
+
+library(dplyr)
+library(stringr)
+library(sf)
+library(ggplot2)
+library(lubridate)
+
+stop_search <- data.frame()
+
+for(z in 18:21)
+{
+for(i in 1:12){
+  file <- here::here("data","stop-search",sprintf("20%02d-%02d",z,i),sprintf("20%02d-%02d-metropolitan-stop-and-search.csv",z, i))
+  if(file.exists(file)){
+    temp <- readr::read_csv(file)
+    stop_search <- rbind(stop_search, temp)  
+  }
+  
+}
+}
+
+stop_search <- stop_search%>%
+  janitor::clean_names()
+
+rm(i,z,file, temp)
+
+```
+
+```{r}
+
+# read in the shapefile, transform it into long lat format
+wards <- st_read(here::here("data/London-wards-2018_ESRI/London_Ward_CityMerged.shp"))
+wards <- st_transform(wards,crs=4326)
+
+# transform points to sf
+stops_sf <- st_as_sf(stop_search%>%select(longitude, latitude)%>%na.omit,coords = c('longitude',"latitude"), crs = st_crs(wards))
+
+# intersection of polygons and points
+stop_locations <- stops_sf %>% 
+  mutate(intersection = as.integer(st_intersects(geometry, wards$geometry)),
+         area = if_else(is.na(intersection), '', wards$NAME[intersection])) 
+
+# split geometry in coordinates
+stop_locations <- stop_locations%>%
+  mutate(X= st_coordinates(geometry)[,1],
+         Y= st_coordinates(geometry)[,2])%>%
+  st_drop_geometry()
+
+# stop_locations <- stop_locations[-c(1)]
+
+# join areas to stop search
+stop_search <- left_join(stop_search, stop_locations, by = c("longitude" = "X", "latitude" = "Y" ))
+
+```
+
+```{r}
+
+stop_search <- stop_search%>%
+  mutate(date = ymd_hms(date))
+
+stop_search%>%
+  group_by(area)%>%
+  summarise(num_stops_area = n())%>%
+  mutate(prc_stops_area = num_stops_area/sum(num_stops_area)*100)%>%
+  slice_max(order_by = prc_stops_area, n = 10, with_ties = FALSE)%>%
+  ggplot()+
+  geom_col(aes(x = prc_stops_area,
+               y = reorder(area, prc_stops_area)))+
+  labs(title = "Most Stop and Searches are focused on Touristic Areas and South London",
+       y = "",
+       x = "%")+
+  geom_text(aes(x = prc_stops_area,
+               y = reorder(area, prc_stops_area),
+               label = paste0(round(prc_stops_area,2),"%")),
+            hjust = -0.1)+
+  theme_bw()+
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.border = element_blank())
+
+
+```
+
+
