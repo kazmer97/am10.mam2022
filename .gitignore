@@ -40,3 +40,4 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 .DS_Store
+london_postcodes.csv londonpp_epc.csv

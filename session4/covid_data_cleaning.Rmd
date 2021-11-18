@@ -1,0 +1,300 @@
+---
+title: "Data Cleaning - Covid Data"
+author: "Kazmer Nagy-Betegh"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    highlight: zenburn
+    number_sections: true
+    toc: no
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+[Covid Data variables explanation](https://github.com/owid/covid-19-data/tree/master/public/data)
+
+```{r libraries}
+library(tidyverse)
+library(vroom)
+library(here)
+library(rmarkdown)
+library(zoo)
+```
+
+```{r load data}
+
+# to get the data as of Nov 14, 2021, just read the csv saved in the data folder
+# covid_data <- vroom(here::here("data", "covid_data.csv"))  
+  
+# if you want to get an up-to-date version, run the following lines
+url <- "https://covid.ourworldindata.org/data/owid-covid-data.csv"
+covid_data <- vroom(url) %>% 
+  mutate(perc = round(100 * people_fully_vaccinated / population, 2))
+
+glimpse(covid_data)
+
+```
+
+```{r inspect data}
+
+
+skimr::skim(covid_data)
+
+original <- covid_data
+
+covid_data <- covid_data%>%
+  mutate(date = as.Date(date))
+
+covid_data %>% 
+  count(tests_units, sort = TRUE)
+
+covid_data %>%
+  filter(!is.na(tests_units)) %>%
+  arrange(total_tests) %>%
+  select(iso_code, total_cases, date, tests_units, total_tests)
+
+```
+
+The tests_units are going to be grouped the following way: *tests performed, people tested, samples tested* will be considered together as it is unlikely that a significant amount of people got tested more than once a day. *NA* and *units unclear* makes the testing data input unusable. *NA* likely indicates when testing has not begun yet at that date within the country.
+
+```{r test types unify}
+
+covid_data <- covid_data %>% 
+  mutate(tests_units_grouped = case_when(tests_units == "tests performed" ~ "tested",
+                                 tests_units == "people tested"~ "tested",
+                                 tests_units == "samples tested"~ "tested",
+                                 tests_units == NA ~ "testing not started",
+                                 TRUE ~ tests_units))
+
+```
+
+Saving the date the first case is recorded within each country
+```{r pandemic startdate}
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>%
+  arrange(date) %>% 
+  filter(total_cases >= 0) %>% 
+  mutate(start_date = date[1]) %>% 
+  ungroup()
+```
+
+Counting the days since the first recoded case
+```{r days since start}
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>% 
+  mutate(pandemic_days = as.numeric(date - start_date , units = "days")) %>% 
+  arrange(date) %>% 
+  ungroup()
+
+```
+
+
+
+total number of hospitalisations
+```{r hospitalisation}
+
+covid_data <- covid_data %>% 
+  group_by(date, iso_code) %>% 
+  mutate(total_hosp = cumsum(hosp_patients),
+         .after = hosp_patients)
+
+glimpse(covid_data)
+```
+
+
+There are some inconsistencies within the dataset. sometimes the number of covid19 hospital patients is higher than the total cases reported for the country. I will continue with the assumption that the hospital data is correct. Based on this I will fix the total numbers 
+
+```{r include=FALSE}
+
+summary(covid_data)
+
+```
+
+
+
+Tonga is either missing data or covid really only has showed up there 2021 October. Quick search confirms this is a correct datapoint [BBC news Tonga First Case](https://www.bbc.co.uk/news/world-asia-59101584)
+
+```{r}
+
+covid_data %>% 
+  filter(start_date == "2021-10-29")
+
+```
+
+
+checking relationship between total_cases and new_cases 
+There are instances of new_cases which are negative. This I assume is incorrect, but it reduces the total number of cases as total_cases seems to follow a cumullative sum relationship with new cases.
+```{r}
+covid_data %>% 
+  arrange((new_cases_smoothed))
+
+covid_data %>% 
+  arrange(new_cases)
+
+covid_data %>% 
+  filter(location == "Spain",
+         date >= "2021-03-01") %>% 
+  select(iso_code, location, date, total_cases, new_cases, new_cases_smoothed, tests_per_case, tests_units, positive_rate, new_tests_smoothed)
+
+covid_data %>% 
+  filter(new_cases <0)
+```
+
+```{r total case drop from negative new_cases}
+
+covid_data %>% 
+  filter(location == "United Kingdom") %>% 
+  ggplot()+
+  geom_line(aes(x = pandemic_days,
+                y = total_cases_per_million))
+
+```
+I'll recalculate all the variables that depend on *new_cases* as I will remove any negative variable from new cases.
+
+```{r remove negative new cases}
+
+covid_data <- covid_data %>% 
+  mutate(new_cases = ifelse(new_cases >= 0, new_cases, 0))
+
+
+# need to calcualte the assumed population of each location in millions
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>% 
+  mutate(population = max(total_cases)/max(total_cases_per_million))%>%
+  ungroup()
+
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>% 
+  mutate(total_cases = cumsum(new_cases)) %>% 
+  mutate(new_cases_smoothed = rollsumr(new_cases, k = 7, fill = NA)) %>% 
+  mutate(total_cases_per_million = total_cases/population) %>% 
+  mutate(new_cases_per_million = new_cases/population) %>% 
+  mutate(new_cases_smoothed_per_million = rollsumr(new_cases_per_million, k = 7, fill = NA)) %>% 
+  ungroup()
+  
+
+```
+
+Repeat the same process for deaths
+
+```{r remove negative deaths}
+
+covid_data <- covid_data %>% 
+  mutate(new_deaths = ifelse(new_deaths >= 0, new_cases, 0))
+
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>% 
+  mutate(total_deaths = cumsum(total_deaths)) %>% 
+  mutate(new_deaths_smoothed = rollsumr(new_deaths, k = 7, fill = NA)) %>% 
+  mutate(total_deaths_per_million = total_deaths/population) %>% 
+  mutate(new_deaths_per_million = new_deaths/population) %>% 
+  mutate(new_deaths_smoothed_per_million = rollsumr(new_deaths_per_million, k = 7, fill = NA)) %>% 
+  ungroup()
+
+```
+
+```{r hospital data check}
+
+# number of times the hospitalisation data does not match up with the reported total cases
+covid_data %>% 
+  group_by(iso_code) %>% 
+  filter(total_cases - total_hosp< 0) %>% 
+  count()
+
+
+# number of times daily hospilatisation data is more than the reported number of new cases
+covid_data %>% 
+  group_by(iso_code) %>% 
+  filter(new_cases  - hosp_patients< 0) %>% 
+  count()
+
+```
+Based on the above two rows it can be seen that the reporting period does not line up correctly between hospital cases and cases in the country. Because no further relationship can be deduced between the variables I will refrain from correcttion as their cumulative values have the correct relationship almost all the time.
+
+
+```{r excess mortality}
+
+covid_data %>% 
+  group_by(iso_code) %>% 
+  arrange(iso_code, date) %>% 
+  select(iso_code, 
+         date, 
+         total_deaths,
+         excess_mortality, 
+         excess_mortality_cumulative, 
+         excess_mortality_cumulative_absolute, 
+         excess_mortality_cumulative_per_million) %>% 
+  filter(!is.na(iso_code),
+         !is.na(total_deaths),
+         !is.na(date), 
+         !is.na(excess_mortality), 
+         !is.na(excess_mortality_cumulative), 
+         !is.na(excess_mortality_cumulative_absolute), 
+         !is.na(excess_mortality_cumulative_per_million))
+
+
+
+```
+
+Based on the above table the relationship trends between total deaths and excess mortality are correct. 
+
+
+
+Add death rate calculation
+```{r death rate}
+
+covid_data <- covid_data %>% 
+  mutate(death_rate = total_deaths/total_cases,
+         .after = new_deaths_smoothed_per_million) %>% 
+  mutate(death_rate_smoothed = rollsumr(death_rate, k = 7, fill = NA),
+         .after = death_rate)
+
+```
+
+
+Adding time passed since 20%, 50% and 75% of the population has been vaccinated to be able to track if the effects of vaccines have dimished over time
+```{r vaccine vaining}
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>%
+  arrange(date) %>% 
+  filter(people_vaccinated_per_hundred >= 20) %>% 
+  mutate(full_vax_prc20 = date[1]) %>% 
+  mutate(full_vax_prc20_days = as.numeric(date - full_vax_prc20 , units = "days")) %>% 
+  ungroup()
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>%
+  arrange(date) %>% 
+  filter(people_vaccinated_per_hundred >= 75) %>% 
+  mutate(full_vax_prc75 = date[1]) %>% 
+  mutate(full_vax_prc75_days = as.numeric(date - full_vax_prc75 , units = "days")) %>% 
+  ungroup()
+
+
+covid_data <- covid_data %>% 
+  group_by(iso_code) %>%
+  arrange(date) %>% 
+  filter(people_vaccinated_per_hundred >= 50) %>% 
+  mutate(full_vax_prc50 = date[1]) %>% 
+  mutate(full_vax_prc50_days = as.numeric(date - full_vax_prc50 , units = "days")) %>% 
+  ungroup()
+
+  
+
+```
+
+
+```{r save data}
+
+write_csv(covid_data, file = here::here("data/cleaned_covid_data.csv"))
+
+```
+

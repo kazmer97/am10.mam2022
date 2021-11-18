@@ -1,87 +1,240 @@
-# MET Police
+---
+title: "Assignment 2"
 
-```{r load met data, include=FALSE}
+author: "Kazmer Nagy-Betegh"
 
-library(dplyr)
-library(stringr)
-library(sf)
-library(ggplot2)
+output:
+  html_document:
+    theme: flatly
+    highlight: zenburn
+    number_sections: true
+    toc: yes
+    toc_float: yes
+
+---
+
+```{r libraries, include=FALSE}
+library(tidyverse)
 library(lubridate)
+library(ggmap)
+library(ggrepel)
+library(gridExtra)
+library(pander)
+library(here)
+library(janitor)
+library(skimr)
+library(leaflet)
+library(tmap)
+library(tmaptools)
+library(hrbrthemes)
+library(mapview)
+library(viridis)
+library(tidyverse) 
+library(lubridate)
+library(janitor)
+library(vroom)
+library(skimr)
+library(sf)
 
-stop_search <- data.frame()
+```
 
-for(z in 18:21)
-{
-for(i in 1:12){
-  file <- here::here("data","stop-search",sprintf("20%02d-%02d",z,i),sprintf("20%02d-%02d-metropolitan-stop-and-search.csv",z, i))
-  if(file.exists(file)){
-    temp <- readr::read_csv(file)
-    stop_search <- rbind(stop_search, temp)  
-  }
+
+```{r  include=FALSE, cache=TRUE}
+
+# read many CSV files
+# Adapted from https://www.gerkelab.com/blog/2018/09/import-directory-csv-purrr-readr/
+
+# assuming all your files are within a directory called 'data/stop-search'
+data_dir <- here::here("data/stop-search")
+
+files <- fs::dir_ls(path = data_dir, regexp = "\\metropolitan-stop-and-search.csv$", recurse = TRUE) 
+#recurse=TRUE will recursively look for files further down into any folders
+
+files
+
+#read them all in using vroom::vroom()
+stop_search_data <- vroom(files, id = "source")
+
+# Uncomment the following lines if you want to see how much faster vroom is
+
+# library(microbenchmark)
+# mbm = microbenchmark(
+#   readr =  map_dfr(files, read_csv, .id = "source"),
+#   vroom =  vroom(files, id = "source"),
+#   times=10
+# )
+# mbm
+
+# Unit: milliseconds
+# expr       min        lq      mean    median        uq       max neval cld
+# readr 3676.9319 3761.8027 3944.5699 3791.1760 4055.4460 4626.9870    10   b
+# vroom  855.9414  864.9085  910.1052  905.8456  948.0134  975.8617    10  a 
+
+#read them all in using vroom::vroom()
+stop_search_data <- vroom(files, id = "source")
+
+
+
+# Use janitor to clean names, and add more variables
+stop_search_all <- stop_search_data %>%
+  janitor::clean_names() %>% 
+  mutate(month = month(date),
+         month_name = month(date, label=TRUE, abbr = TRUE),
+         year= year(date),
+         month_year = paste0(year, "-",month_name)
+  ) %>% 
+
+# rename longitude/latitude to lng/lat
+rename(lng = longitude,
+       lat = latitude)
   
-}
-}
+# skimr::skim() to inspect and get a feel for the data         
+skim(stop_search_all)
 
-stop_search <- stop_search%>%
-  janitor::clean_names()
+# some quick counts...
+stop_search_all %>% 
+  count(gender, sort=TRUE)
 
-rm(i,z,file, temp)
+stop_search_all %>% 
+  count(object_of_search, sort=TRUE)
+
+stop_search_all %>% 
+  count(officer_defined_ethnicity, sort=TRUE)
+
+stop_search_all %>% 
+  count(age_range)
+
+
+
+# concentrate in top  searches, age_ranges, and officer defined ethnicities
+which_searches <- c("Controlled drugs", "Offensive weapons","Stolen goods" )
+which_ages <- c("10-17", "18-24","25-34", "over 34")
+which_ethnicity <- c("White", "Black", "Asian")
+
+stop_search_offence <- stop_search_all %>% 
+  
+  # filter out those stop-and-search where no further action was taken
+  filter(outcome != "A no further action disposal") %>% 
+  
+  #filter out those rows with no latitude/longitude
+  drop_na(lng,lat) %>% 
+  
+  # concentrate in top searches, age_ranges, and officer defined ethnicities
+  filter(object_of_search %in% which_searches) %>% 
+  filter(age_range %in% which_ages) %>% 
+  filter(officer_defined_ethnicity %in% which_ethnicity) %>% 
+  
+  # relevel factors so everything appears in correct order
+  mutate(
+    object_of_search = fct_relevel(object_of_search, 
+                                   c("Controlled drugs", "Offensive weapons","Stolen goods")), 
+    age_range = fct_relevel(age_range, 
+                            c("10-17", "18-24", "25-34", "over 34")), 
+    officer_defined_ethnicity = fct_relevel(officer_defined_ethnicity, 
+                                            c("White", "Black", "Asian"))
+  )
+  
+
+
+# make it a shape file using WGS84 lng/lat coordinates
+stop_search_offence_sf <-  st_as_sf(stop_search_offence, 
+                              coords=c('lng', 'lat'), 
+                              crs = 4326)
+
+st_geometry(stop_search_offence_sf) # what is the geometry ?
+# stop_search_offence_sf = geographic CRS: WGS 84
+
+# make sure you have the same direcory stucture to get London wards shapefile
+london_wards_sf <- read_sf(here::here("data/London-wards-2018_ESRI","London_Ward.shp"))
+
+st_geometry(london_wards_sf) # what is the geometry ?
+# london_wards_sf = projected CRS:  OSGB 1936 / British National Grid
+
+# change the CRS to use WGS84 lng/lat pairs
+london_wgs84 <-  london_wards_sf %>% 
+  st_transform(4326) # transform CRS to WGS84, latitude/longitude
+
+st_geometry(london_wgs84) # what is the geometry ?
+
 
 ```
 
-```{r}
+# 1
 
-# read in the shapefile, transform it into long lat format
-wards <- st_read(here::here("data/London-wards-2018_ESRI/London_Ward_CityMerged.shp"))
-wards <- st_transform(wards,crs=4326)
+A clear distinction can be seen between the number of stop and searches within St James's and everywhere else. This is likely due to major government offices being located within there and the need for increased security. While terror attacks have also taken place on bridges within St James's and it is also a highly tourist area which all contribute to an increased level of police presence. 
 
-# transform points to sf
-stops_sf <- st_as_sf(stop_search%>%select(longitude, latitude)%>%na.omit,coords = c('longitude',"latitude"), crs = st_crs(wards))
+```{r eval=TRUE}
 
-# intersection of polygons and points
-stop_locations <- stops_sf %>% 
-  mutate(intersection = as.integer(st_intersects(geometry, wards$geometry)),
-         area = if_else(is.na(intersection), '', wards$NAME[intersection])) 
-
-# split geometry in coordinates
-stop_locations <- stop_locations%>%
-  mutate(X= st_coordinates(geometry)[,1],
-         Y= st_coordinates(geometry)[,2])%>%
-  st_drop_geometry()
-
-# stop_locations <- stop_locations[-c(1)]
-
-# join areas to stop search
-stop_search <- left_join(stop_search, stop_locations, by = c("longitude" = "X", "latitude" = "Y" ))
-
+london_wgs84%>%
+  mapview::mapview(zcol = "count", 
+                   at = seq(0, max(london_wgs84$count, na.rm = TRUE), 200), 
+                   legend = TRUE,
+                   col.regions = plasma(n = 14),
+                   layer.name = "Cases per ward")
 ```
 
+# 2
+
+Over the past three years we cannot notice any significant trends in the percentage distribution of the races being stopped. We see an outlier in 2018 October where either no black people where stopped or, the data is faulty from that month.
+
 ```{r}
 
-stop_search <- stop_search%>%
-  mutate(date = ymd_hms(date))
-
-stop_search%>%
-  group_by(area)%>%
-  summarise(num_stops_area = n())%>%
-  mutate(prc_stops_area = num_stops_area/sum(num_stops_area)*100)%>%
-  slice_max(order_by = prc_stops_area, n = 10, with_ties = FALSE)%>%
+stop_search_offence%>%
+  group_by(month_year, officer_defined_ethnicity)%>%
+  summarise(num_stops = n())%>%
+  mutate(prc_stops = round(num_stops/sum(num_stops)*100,2))%>%
   ggplot()+
-  geom_col(aes(x = prc_stops_area,
-               y = reorder(area, prc_stops_area)))+
-  labs(title = "Most Stop and Searches are focused on Touristic Areas and South London",
-       y = "",
-       x = "%")+
-  geom_text(aes(x = prc_stops_area,
-               y = reorder(area, prc_stops_area),
-               label = paste0(round(prc_stops_area,2),"%")),
-            hjust = -0.1)+
-  theme_bw()+
+  geom_point(aes(x = month_year,
+                y = prc_stops,
+                color = officer_defined_ethnicity,
+                group = officer_defined_ethnicity ))+
+  geom_line(aes(x = month_year,
+                y = prc_stops,
+                color = officer_defined_ethnicity,
+                group = officer_defined_ethnicity ))+
+  labs(title = "The Disproportionate Stop and Searches of minorities hasn't improved in the past 3 years",
+       y = "%",
+       x = "",
+       color = "")+
+  theme_minimal()+
   theme(plot.background = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.border = element_blank())
-
+        panel.grid = element_blank(),
+        axis.text.x  = element_text(angle = 45))+
+  scale_color_manual(values = c("gray", "black","yellow3"))
+  
 
 ```
+# 3
 
+All ethnicitites seems to be searched for drug possesion mainly. While out of the ethnicities black are most likely to be checked for weapons and whites for stolen goods.
 
+```{r}
+
+stop_search_offence%>%
+  group_by(officer_defined_ethnicity, object_of_search)%>%
+  summarise(num_stops = n())%>%
+  mutate(prc_stops = round(num_stops/sum(num_stops)*100,2))%>%
+  ggplot()+
+  geom_col(aes(x = officer_defined_ethnicity,
+               y = prc_stops,
+               fill = object_of_search),
+           position = "dodge")+
+  scale_fill_manual(values = c("olivedrab2","tomato2","skyblue"))+
+  labs(title = "All ethnicities are overwhelmingly searched for drugs",
+       x ="",
+       y = "%",
+       fill = "")+
+  geom_text(aes(x = officer_defined_ethnicity,
+               y = prc_stops,
+               label = paste0(prc_stops,"%"),
+               group = object_of_search),
+           position = position_dodge(width = 0.9),
+           vjust = -0.5)+
+  theme_minimal()+
+  theme(plot.background = element_blank(),
+        panel.grid = element_blank())
+
+```
+# CRAP and Albert Cairo
+
+CRAP and Albert's principles are applied in my graphs by removing all borders and unnecessary text from the graph, making everything clearly proportional and adding strong contrast for ease of legibility. Graph elements are not overlapping to avoid misleading the audience. While I wouldn't be able to call it enlightening, they are defiantly insightful, this is an area that needs work. And finally, beauty is in the eye of the beholder and they all look gorgeous to me. 

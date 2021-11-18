@@ -56,7 +56,7 @@ There are many functions you can use to upload data R, I prefer to save my data 
 ppd_data <- read_csv(here::here("data","londonpp_epc.csv")) %>% 
   janitor::clean_names()
 
-london_postcodes <-  read_csv(here::here("data","london_postcodes.zip")) %>% 
+london_postcodes <-  read_csv(here::here("data","london_postcodes.csv")) %>% 
     janitor::clean_names()
 
 glimpse(ppd_data)
