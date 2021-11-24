@@ -43,3 +43,4 @@ vignettes/*.pdf
 *london_postcodes.csv 
 *londonpp_epc.csv
 */data
+session3/clean_london_house_prices.csv
