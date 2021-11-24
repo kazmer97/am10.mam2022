@@ -79,8 +79,6 @@ london_matched <- ppd_data %>%
 # IS LBS in here?
 london_matched  %>% 
   filter(postcode == "NW1 4SA")
-
-
 ```
 
 
@@ -123,7 +121,10 @@ I prefer to start with categorical variables. We can investigate categorical dat
 ```{r join_with_postcodes}
 
 london_matched <- london_matched %>% 
-  left_join(london_postcodes, by="postcode") 
+  left_join(london_postcodes) 
+
+colnames(london_matched)
+
 ```
 
 
@@ -139,7 +140,7 @@ london_matched %>%
 
 #Let's take a look at the county
 london_matched %>% 
-  count(county.x, sort=TRUE) %>% 
+  count(county, sort=TRUE) %>% 
   mutate(perc = round(100*n/sum(n),2))
 
 #Let's take a look at the district
@@ -252,6 +253,11 @@ In this case, we only have a single data set so I focus on i and ii.
 We have already seen that there are some houses with unrealistic prices; eg., 0 to 600 mil. The only way to check whether these are legitimate records is by looking at the details of these data sets. Let's take a look at the really expensive and really cheap places.
 
 ```{r outlier_properties}
+library(stringr)
+library(tidyverse)
+
+london_matched <- london_matched %>% # most expensive house ever sold is 200M in London
+  filter(price < 200*10^6)
 
 expensive_houses <- london_matched %>% 
   slice_max(order_by = price, n=50)
@@ -259,6 +265,13 @@ expensive_houses <- london_matched %>%
 cheap_houses <- london_matched %>% 
   slice_min(order_by = price, n=50)
 
+cut_houses <- expensive_houses %>% 
+  filter(is.na(postcode) | str_detect(address2, "GROUND" ))
+
+
+london_matched <- london_matched %>% 
+  filter(!id %in% cut_houses$id) %>% 
+  filter(!id %in% cheap_houses$id)
 
 ```
 
@@ -273,7 +286,6 @@ london_matched <- london_matched %>%
 
 london_matched %>% 
   count(type1)
-
 
 
 ```
@@ -296,8 +308,15 @@ london_matched <- london_matched %>%
     central_london = ifelse(london_zone==1, "central", "outer")
   )
 
+
 ```
 
+
+```{r save data}
+
+write_csv(london_matched, "clean_london_house_prices.csv")
+
+```
 
 
 # Missing values
